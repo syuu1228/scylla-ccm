@@ -151,9 +151,11 @@ class ScyllaNode(Node):
     def get_tool(self, toolname):
         candidate_dirs = [
             os.path.join(self.node_install_dir, 'share', 'cassandra', BIN_DIR),
-            os.path.join(self.get_tools_java_dir(), BIN_DIR),
             os.path.join(self.get_cqlsh_dir(), BIN_DIR),
         ]
+        tools_java_dir = self.get_tools_java_dir()
+        if tools_java_dir:
+            candidate_dirs.append(os.path.join(tools_java_dir, BIN_DIR))
         for candidate_dir in candidate_dirs:
             candidate = shutil.which(toolname, path=candidate_dir)
             if candidate:
@@ -167,8 +169,12 @@ class ScyllaNode(Node):
         update_conf = not self.__conf_updated
         if update_conf:
             self.__conf_updated = True
-        return common.make_cassandra_env(self.get_install_cassandra_root(),
-                                         self.get_node_cassandra_root(), update_conf=update_conf)
+        tools_java_dir = self.get_tools_java_dir()
+        if not tools_java_dir:
+            return os.environ.copy()
+        else:
+            return common.make_cassandra_env(self.get_install_cassandra_root(),
+                                             self.get_node_cassandra_root(), update_conf=update_conf)
 
     def _get_environ(self, extra_env = None, /, **kwargs):
         try:
@@ -1000,7 +1006,12 @@ class ScyllaNode(Node):
         return os.path.join(self.node_install_dir, 'tools', 'cqlsh')
 
     def __copy_logback_files(self):
-        shutil.copy(os.path.join(self.get_tools_java_dir(), 'conf', 'logback-tools.xml'),
+        tools_java_dir = self.get_tools_java_dir()
+        if not tools_java_dir:
+            # in newer scylla, the java-base scylla-tools is dropped, so this
+            # directory cannot be found in that case.
+            return
+        shutil.copy(os.path.join(tools_java_dir, 'conf', 'logback-tools.xml'),
                     os.path.join(self.get_conf_dir(), 'logback-tools.xml'))
 
     def import_dse_config_files(self):
@@ -1045,23 +1056,25 @@ class ScyllaNode(Node):
 
 
     def import_bin_files(self, exist_ok=False, replace=False):
-        # selectively copying files to reduce risk of using unintended items
-        self._copy_binaries(files=[CASSANDRA_SH, 'nodetool'],
-                            src_path=os.path.join(self.get_tools_java_dir(), BIN_DIR),
-                            dest_path=os.path.join(self.get_path(), 'resources', 'cassandra', BIN_DIR),
-                            exist_ok=exist_ok,
-                            replace=replace
-                            )
+        tools_java_dir = self.get_tools_java_dir()
+        if tools_java_dir:
+            # selectively copying files to reduce risk of using unintended items
+            self._copy_binaries(files=[CASSANDRA_SH, 'nodetool'],
+                                src_path=os.path.join(tools_java_dir, BIN_DIR),
+                                dest_path=os.path.join(self.get_path(), 'resources', 'cassandra', BIN_DIR),
+                                exist_ok=exist_ok,
+                                replace=replace
+                                )
 
-        # selectively copying files to reduce risk of using unintended items
-        # Copy sstable tools
-        self._copy_binaries(files=['sstabledump', 'sstablelevelreset', 'sstablemetadata',
-                                   'sstablerepairedset', 'sstablesplit'],
-                            src_path=os.path.join(self.get_tools_java_dir(), 'tools', BIN_DIR),
-                            dest_path=os.path.join(self.get_path(), 'resources', 'cassandra', 'tools', BIN_DIR),
-                            exist_ok=exist_ok,
-                            replace=replace
-                            )
+            # selectively copying files to reduce risk of using unintended items
+            # Copy sstable tools
+            self._copy_binaries(files=['sstabledump', 'sstablelevelreset', 'sstablemetadata',
+                                       'sstablerepairedset', 'sstablesplit'],
+                                src_path=os.path.join(tools_java_dir, 'tools', BIN_DIR),
+                                dest_path=os.path.join(self.get_path(), 'resources', 'cassandra', 'tools', BIN_DIR),
+                                exist_ok=exist_ok,
+                                replace=replace
+                                )
 
         # TODO: - currently no scripts only executable - copying exec
         if self.is_scylla_reloc():
@@ -1785,6 +1798,33 @@ class ScyllaNode(Node):
                                      column_family=column_family,
                                      idle_timeout=idle_timeout)
 
+    def run_sstable2json(self, out_file=None, keyspace=None, datafiles=None, column_families=None, enumerate_keys=False):
+        raise common.ArgumentError('Scylla nodes do not support sstable2json')
+
+    def run_json2sstable(self, in_file, ks, cf, keyspace=None, datafiles=None, column_families=None, enumerate_keys=False):
+        raise common.ArgumentError('Scylla nodes do not support json2sstable')
+
+    def run_sstablesplit(self, datafiles=None, size=None, keyspace=None, column_families=None,
+                         no_snapshot=False, debug=False):
+        raise common.ArgumentError('Scylla nodes do not support sstablesplit')
+
+    def run_sstablemetadata(self, output_file=None, datafiles=None, keyspace=None, column_families=None):
+        raise common.ArgumentError('Scylla nodes do not support sstablemetadata')
+
+    def run_sstableexpiredblockers(self, output_file=None, keyspace=None, column_family=None):
+        raise common.ArgumentError('Scylla nodes do not support sstableexpiredblockers')
+
+    def run_sstablerepairedset(self, set_repaired=True, datafiles=None, keyspace=None, column_families=None):
+        raise common.ArgumentError('Scylla nodes do not support sstablerepairedset')
+
+    def run_sstablelevelreset(self, keyspace, cf, output=False):
+        raise common.ArgumentError('Scylla nodes do not support sstablelevelreset')
+
+    def run_sstableofflinerelevel(self, keyspace, cf, dry_run=False, output=False):
+        raise common.ArgumentError('Scylla nodes do not support sstableofflinerelevel')
+
+    def run_sstableverify(self, keyspace, cf, options=None, output=False):
+        raise common.ArgumentError('Scylla nodes do not support sstableverify')
 
 class NodeUpgrader:
 
